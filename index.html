@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CircuitForge Pro — Electronics Design Studio</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     HEADER
+     ══════════════════════════════════════════════════════════ -->
+<header class="header">
+  <div class="header-logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div class="logo-text">∑nG²eeks</div>
+    </div>
+    <div class="logo-badge">v3.0</div>
+  </div>
+
+  <div class="header-status">
+    <div class="status-chip">
+      <div class="status-dot"></div>
+      DESIGN ENGINE READY
+    </div>
+    <div class="status-chip" id="active-circuit-name" style="color:var(--text3)">
+      No circuit loaded
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <button class="hdr-btn hdr-btn-ghost" onclick="toggleTheme()">🌓 Theme</button>
+    <button class="hdr-btn hdr-btn-ghost" onclick="exportPNG()">↓ PNG</button>
+    <button class="hdr-btn hdr-btn-ghost" onclick="exportReport()">📄 Report</button>
+    <button class="hdr-btn hdr-btn-accent" onclick="showShortcuts()">⌨ Keys</button>
+  </div>
+</header>
+
+<!-- ══════════════════════════════════════════════════════════
+     WORKSPACE
+     ══════════════════════════════════════════════════════════ -->
+<div class="workspace">
+
+  <!-- ── SIDEBAR ── -->
+  <aside class="sidebar">
+    <div class="sidebar-search">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-box" id="searchInput"
+          placeholder="Search 30+ circuits…"
+          oninput="filterNav(this.value)">
+      </div>
+    </div>
+    <div class="sidebar-nav" id="sidebarNav"></div>
+  </aside>
+
+  <!-- ── MAIN PANEL ── -->
+  <div class="main-panel">
+
+    <!-- Top tab bar -->
+    <div class="panel-tabs">
+      <button class="panel-tab active" onclick="switchMainTab('schematic',this)">⚡ Schematic</button>
+      <button class="panel-tab"        onclick="switchMainTab('bode',this)">📈 Bode Plot</button>
+      <button class="panel-tab"        onclick="switchMainTab('transient',this)">〰 Transient</button>
+      <button class="panel-tab"        onclick="switchMainTab('phasor',this)">🔄 Phasor</button>
+      <button class="panel-tab"        onclick="switchMainTab('components',this)">🔧 Tools</button>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: SCHEMATIC
+         ════════════════════════════════ -->
+    <div class="circuit-view" id="mainViewSchematic" style="flex:1;display:flex;overflow:hidden">
+
+      <!-- Canvas area -->
+      <div class="canvas-area">
+        <div class="canvas-toolbar">
+          <div class="canvas-toolbar-left">
+            <div>
+              <div class="circuit-title-display" id="canvasCircuitTitle">Select a circuit from the sidebar</div>
+              <div class="circuit-subtitle-display" id="canvasCircuitSub">CircuitForge Pro — Electronics Design Studio</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="tb-btn" onclick="zoomCanvas(1.25)">🔍+</button>
+            <button class="tb-btn" onclick="zoomCanvas(0.8)">🔍−</button>
+            <button class="tb-btn" onclick="resetZoom()">⊡ Fit</button>
+            <button class="tb-btn" onclick="toggleGrid()">⊞ Grid</button>
+            <button class="tb-btn" onclick="copyCanvasImage()">⎘ Copy</button>
+            <button class="tb-btn" onclick="exportPNG()">↓ Save</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap" id="canvasWrap">
+          <!-- Welcome state -->
+          <div class="welcome-state" id="welcomeState">
+            <div class="welcome-icon">⚡</div>
+            <div class="welcome-title">Electronics Design Studio</div>
+            <div class="welcome-sub">
+              Select any circuit from the sidebar to begin synthesis.
+              Over 30 professional circuit topologies with real-time calculations,
+              Bode plots, transient simulation, and AI-powered design advice.
+            </div>
+          </div>
+          <!-- Schematic canvas -->
+          <canvas id="circuitCanvas" width="1100" height="520" style="display:none"></canvas>
+        </div>
+      </div>
+
+      <!-- Right panel -->
+      <div class="right-panel">
+        <div class="right-panel-tabs">
+          <button class="rp-tab active" onclick="switchRpTab('params',this)">Params</button>
+          <button class="rp-tab"        onclick="switchRpTab('analysis',this)">Analysis</button>
+          <button class="rp-tab"        onclick="switchRpTab('advisor',this)">AI</button>
+          <button class="rp-tab"        onclick="switchRpTab('history',this)">History</button>
+        </div>
+
+        <!-- PARAMS -->
+        <div class="right-panel-content active" id="rp-params">
+          <div id="paramsContainer">
+            <div style="text-align:center;padding:32px 16px;color:var(--text3);font-size:12px">
+              Select a circuit to configure parameters
+            </div>
+          </div>
+        </div>
+
+        <!-- ANALYSIS -->
+        <div class="right-panel-content" id="rp-analysis">
+          <div id="analysisContainer">
+            <div style="text-align:center;padding:32px 16px;color:var(--text3);font-size:12px">
+              Run a circuit to see analysis
+            </div>
+          </div>
+        </div>
+
+        <!-- AI ADVISOR -->
+        <div class="right-panel-content" id="rp-advisor">
+          <div class="advisor-card">
+            <div class="advisor-header">
+              <div class="advisor-icon">🧠</div>
+              <div class="advisor-title">AI Design Advisor</div>
+              <div class="badge badge-beta" style="margin-left:auto">AI</div>
+            </div>
+            <div class="ai-messages" id="aiMessages">
+              <div class="ai-msg ai-msg-bot">
+                Welcome! I'm your AI electronics design advisor. Ask me anything —
+                component selection, design rules, troubleshooting, calculations, or
+                circuit theory. I'll give you practical, engineer-level answers.
+              </div>
+            </div>
+            <div class="ai-input-wrap">
+              <input class="ai-input" id="aiInputField"
+                placeholder="Ask about this circuit…"
+                onkeydown="if(event.key==='Enter')sendAiMessage()">
+              <button class="ai-send-btn" onclick="sendAiMessage()">Ask</button>
+            </div>
+          </div>
+
+          <div class="advisor-card" id="designTipsCard">
+            <div class="advisor-header">
+              <div class="advisor-icon">💡</div>
+              <div class="advisor-title">Design Tips</div>
+            </div>
+            <ul class="advisor-list" id="designTipsList">
+              <li class="advisor-item">
+                <div class="advisor-bullet"></div>
+                Select a circuit to see professional design tips
+              </li>
+            </ul>
+          </div>
+
+          <div class="param-section">
+            <div class="param-section-title">📚 References</div>
+            <div style="font-size:11px;color:var(--text3);line-height:1.7" id="referencesBox">
+              Load a circuit for application notes and datasheet references.
+            </div>
+          </div>
+        </div>
+
+        <!-- HISTORY -->
+        <div class="right-panel-content" id="rp-history">
+          <div class="param-section">
+            <div class="param-section-title">📜 Design History</div>
+            <div id="historyList" style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+              <div style="font-size:11px;color:var(--text3)">No designs saved yet.</div>
+            </div>
+          </div>
+          <button class="run-btn"
+            style="background:linear-gradient(135deg,#ef4444,#dc2626);margin-top:auto"
+            onclick="clearHistory()">🗑 Clear History</button>
+        </div>
+      </div>
+      <!-- /right-panel -->
+    </div>
+    <!-- /mainViewSchematic -->
+
+    <!-- ════════════════════════════════
+         VIEW: BODE PLOT
+         ════════════════════════════════ -->
+    <div id="mainViewBode" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+      <div class="view-inner">
+        <div class="view-header">
+          <div>
+            <div class="view-title">Bode Plot Analyzer</div>
+            <div class="view-sub">Magnitude &amp; Phase response vs Frequency</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="tb-btn" onclick="exportBodePlot()">↓ Export</button>
+            <button class="tb-btn" onclick="runBodePlot()">▶ Replot</button>
+          </div>
+        </div>
+
+        <div class="plot-container" style="flex:1;min-height:0">
+          <div class="plot-title">Magnitude Response (dB)</div>
+          <div style="position:relative;height:210px"><canvas id="bodeChartMag"></canvas></div>
+        </div>
+
+        <div class="plot-container">
+          <div class="plot-title">Phase Response (degrees)</div>
+          <div style="position:relative;height:185px"><canvas id="bodeChartPhase"></canvas></div>
+        </div>
+
+        <div class="grid-3">
+          <div class="metric-tile"><div class="metric-val" id="bm_fc">—</div><div class="metric-unit">Hz</div><div class="metric-label">−3dB Freq</div></div>
+          <div class="metric-tile"><div class="metric-val" id="bm_bw">—</div><div class="metric-unit">Hz</div><div class="metric-label">Bandwidth</div></div>
+          <div class="metric-tile"><div class="metric-val" id="bm_gain">—</div><div class="metric-unit">dB</div><div class="metric-label">DC Gain</div></div>
+          <div class="metric-tile"><div class="metric-val" id="bm_q">—</div><div class="metric-unit"></div><div class="metric-label">Q Factor</div></div>
+          <div class="metric-tile"><div class="metric-val" id="bm_pm">—</div><div class="metric-unit">°</div><div class="metric-label">Phase Margin</div></div>
+          <div class="metric-tile"><div class="metric-val" id="bm_slope">—</div><div class="metric-unit">dB/oct</div><div class="metric-label">Roll-off</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: TRANSIENT
+         ════════════════════════════════ -->
+    <div id="mainViewTransient" style="display:none;flex:1;flex-direction:column;overflow:hidden">
+      <div class="view-inner">
+        <div class="view-header">
+          <div>
+            <div class="view-title">Transient Simulator</div>
+            <div class="view-sub">Time-domain waveform analysis</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select class="param-select" style="width:auto;font-size:11px" id="transientWaveType" onchange="runTransient()">
+              <option>Sine</option>
+              <option>Square</option>
+              <option>Triangle</option>
+              <option>Step</option>
+            </select>
+            <button class="tb-btn" onclick="runTransient()">▶ Simulate</button>
+          </div>
+        </div>
+
+        <div class="plot-container" style="flex:1;min-height:0">
+          <div class="plot-title">Input / Output Waveform</div>
+          <div style="position:relative;height:280px"><canvas id="transientChart"></canvas></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="metric-tile"><div class="metric-val" id="tm_vin">—</div><div class="metric-unit">V</div><div class="metric-label">Input Amplitude</div></div>
+          <div class="metric-tile"><div class="metric-val" id="tm_vout">—</div><div class="metric-unit">V</div><div class="metric-label">Output Amplitude</div></div>
+          <div class="metric-tile"><div class="metric-val" id="tm_gain">—</div><div class="metric-unit">×</div><div class="metric-label">Measured Gain</div></div>
+          <div class="metric-tile"><div class="metric-val" id="tm_phase">—</div><div class="metric-unit">°</div><div class="metric-label">Phase Shift</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: PHASOR
+         ════════════════════════════════ -->
+    <div id="mainViewPhasor"
+      style="display:none;flex:1;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;overflow:hidden">
+      <div class="view-title">Phasor Diagram</div>
+      <canvas id="phasorCanvas" width="380" height="380"></canvas>
+      <div class="grid-2" style="width:100%;max-width:380px">
+        <div class="metric-tile"><div class="metric-val" id="ph_mag">—</div><div class="metric-unit">norm.</div><div class="metric-label">Output Magnitude</div></div>
+        <div class="metric-tile"><div class="metric-val" id="ph_phase">—</div><div class="metric-unit">°</div><div class="metric-label">Phase Shift</div></div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: TOOLS / COMPONENTS
+         ════════════════════════════════ -->
+    <div id="mainViewComponents" style="display:none;flex:1;overflow-y:auto;padding:24px">
+
+      <!-- E-Series Picker -->
+      <div style="margin-bottom:32px">
+        <div class="view-title" style="font-size:16px;margin-bottom:4px">E-Series Component Picker</div>
+        <div class="view-sub" style="margin-bottom:16px">Find nearest standard resistor or capacitor value</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="param-label">Target Value</label>
+            <input type="number" class="param-input" id="eSeriesTarget" value="10000" style="width:150px">
+          </div>
+          <div>
+            <label class="param-label">Series</label>
+            <select class="param-select" id="eSeriesType" style="width:110px">
+              <option value="E12">E12</option>
+              <option value="E24" selected>E24</option>
+              <option value="E48">E48</option>
+              <option value="E96">E96</option>
+            </select>
+          </div>
+          <div>
+            <label class="param-label">Component</label>
+            <select class="param-select" id="eSeriesComp" style="width:140px">
+              <option value="R">Resistor (Ω)</option>
+              <option value="C">Capacitor (F)</option>
+            </select>
+          </div>
+          <button class="run-btn" style="width:auto;padding:10px 24px" onclick="runEseriesPicker()">Find Nearest</button>
+        </div>
+        <div id="eSeriesResult" style="margin-top:12px"></div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-bottom:28px"></div>
+
+      <!-- Ohm's Law Calculator -->
+      <div style="margin-bottom:32px">
+        <div class="view-title" style="font-size:16px;margin-bottom:4px">Ohm's Law Calculator</div>
+        <div class="view-sub" style="margin-bottom:16px">Enter any two values — the others are calculated</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="param-label">Voltage V (V)</label>
+            <input type="number" class="param-input" id="ohm_v" style="width:120px" oninput="calcOhm('v')" placeholder="V">
+          </div>
+          <div>
+            <label class="param-label">Current I (mA)</label>
+            <input type="number" class="param-input" id="ohm_i" style="width:120px" oninput="calcOhm('i')" placeholder="mA">
+          </div>
+          <div>
+            <label class="param-label">Resistance R (kΩ)</label>
+            <input type="number" class="param-input" id="ohm_r" style="width:120px" oninput="calcOhm('r')" placeholder="kΩ">
+          </div>
+          <div>
+            <label class="param-label">Power P (mW)</label>
+            <input type="number" class="param-input" id="ohm_p" style="width:120px" placeholder="mW" readonly
+              style="opacity:0.7">
+          </div>
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--text3);font-family:'Space Mono',monospace">
+          V = I×R &nbsp;|&nbsp; P = V×I &nbsp;|&nbsp; R = V/I
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-bottom:28px"></div>
+
+      <!-- RC Time Constant -->
+      <div style="margin-bottom:32px">
+        <div class="view-title" style="font-size:16px;margin-bottom:4px">RC Time Constant &amp; Frequency</div>
+        <div class="view-sub" style="margin-bottom:16px">τ = R×C &nbsp;|&nbsp; fc = 1/(2π×RC)</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="param-label">Resistance R (kΩ)</label>
+            <input type="number" class="param-input" id="rc_r" value="10" style="width:150px" oninput="calcRC()">
+          </div>
+          <div>
+            <label class="param-label">Capacitance C (nF)</label>
+            <input type="number" class="param-input" id="rc_c" value="100" style="width:150px" oninput="calcRC()">
+          </div>
+          <div id="rc_result"
+            style="padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                   font-family:'Space Mono',monospace;font-size:12px;color:var(--accent3);min-width:260px">
+            τ = — &nbsp;|&nbsp; fc = —
+          </div>
+        </div>
+      </div>
+
+      <div style="border-top:1px solid var(--border);margin-bottom:28px"></div>
+
+      <!-- dB / Linear Converter -->
+      <div style="margin-bottom:32px">
+        <div class="view-title" style="font-size:16px;margin-bottom:4px">dB ↔ Linear Converter</div>
+        <div class="view-sub" style="margin-bottom:16px">Convert between dB and linear gain/power ratios</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+          <div>
+            <label class="param-label">dB Value</label>
+            <input type="number" class="param-input" id="db_val" value="20" style="width:140px" oninput="calcDB()">
+          </div>
+          <div id="db_result"
+            style="padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+                   font-family:'Space Mono',monospace;font-size:12px;color:var(--accent3);min-width:280px">
+            Voltage ratio: — &nbsp;|&nbsp; Power ratio: —
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <!-- /mainViewComponents -->
+
+  </div>
+  <!-- /main-panel -->
+
+</div>
+<!-- /workspace -->
+
+<!-- ══════════════════════════════════════════════════════════
+     STATUS BAR
+     ══════════════════════════════════════════════════════════ -->
+<div class="status-bar">
+  <div class="sb-item"><span class="sb-accent">●</span> <span id="sb_circuit">Ready</span></div>
+  <div class="sb-item" id="sb_gain" style="display:none">
+    Gain: <span class="sb-accent" id="sb_gain_val">—</span>
+  </div>
+  <div class="sb-item" id="sb_freq" style="display:none">
+    f₀: <span class="sb-accent" id="sb_freq_val">—</span>
+  </div>
+  <div class="sb-item" style="margin-left:auto">∑nG²eeks v3.0</div>
+  <div class="sb-item">⚡ Eng. Mohamed Nasr</div>
+</div>
+
+<!-- Notification toast -->
+<div class="notif" id="notif"></div>
+
+<!-- ══════════════════════════════════════════════════════════
+     SCRIPTS  (order matters: engine → circuits → charts → app)
+     ══════════════════════════════════════════════════════════ -->
+<script src="engine.js"></script>
+<script src="circuits.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
+
+<!-- dB converter (inline, small enough) -->
+<script>
+  function calcDB() {
+    const db  = parseFloat(document.getElementById('db_val')?.value) || 0;
+    const vr  = Math.pow(10, db / 20);
+    const pr  = Math.pow(10, db / 10);
+    const el  = document.getElementById('db_result');
+    if (el) {
+      el.innerHTML =
+        `Voltage ratio: <strong>${vr.toFixed(4)}</strong> &nbsp;|&nbsp; Power ratio: <strong>${pr.toFixed(4)}</strong>`;
+    }
+  }
+  // run once on load
+  document.addEventListener('DOMContentLoaded', calcDB);
+</script>
+
+</body>
+</html>

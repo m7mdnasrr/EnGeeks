@@ -1,0 +1,22 @@
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor folders
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Vercel local dev
+.vercel/
+
+# Node (if you ever add a build step)
+node_modules/
+npm-debug.log*
+
+# Environment variables (never commit these)
+.env
+.env.local
+.env.production
