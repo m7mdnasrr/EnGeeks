@@ -1,9 +1,19 @@
 /* ============================================================
    CircuitForge Pro — app.js
-   Main application controller
+   Main application controller (fixed recursion + re-entrancy lock)
    ============================================================ */
 
 'use strict';
+
+/* ── Global error catcher ── */
+window.addEventListener('error', (e) => {
+  console.error('Global error:', e.error);
+  if (window.AppUtils) {
+    window.AppUtils.notify(`Script error: ${e.message}`, 'err');
+  } else {
+    alert(`Script error: ${e.message}`);
+  }
+});
 
 /* ============================================================
    APP STATE
@@ -13,7 +23,7 @@ const AppState = {
   currentId:    null,
   bodeData:     null,
   mainView:     'schematic',
-  history:      [],          /* [{ id, title, time, vals, results }] */
+  history:      [],
   MAX_HISTORY:  25,
 };
 
@@ -42,9 +52,10 @@ window.AppUtils = {
   exportPNG() {
     if (!AppState.currentId) { this.notify('Load a circuit first', 'warn'); return; }
     const canvas = document.getElementById('circuitCanvas');
-    const link   = document.createElement('a');
+    if (!canvas) { this.notify('Canvas not found', 'err'); return; }
+    const link = document.createElement('a');
     link.download = `CircuitForge_${AppState.currentId}_${Date.now()}.png`;
-    link.href     = canvas.toDataURL('image/png');
+    link.href = canvas.toDataURL('image/png');
     link.click();
     this.notify('Circuit exported as PNG!');
   },
@@ -54,8 +65,7 @@ window.AppUtils = {
     if (!canvas) return;
     canvas.toBlob(blob => {
       if (navigator.clipboard && window.ClipboardItem) {
-        navigator.clipboard
-          .write([new ClipboardItem({ 'image/png': blob })])
+        navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
           .then(() => AppUtils.notify('Copied to clipboard!'))
           .catch(() => AppUtils.notify('Copy failed', 'err'));
       } else {
@@ -66,9 +76,9 @@ window.AppUtils = {
 
   exportReport() {
     if (!AppState.currentId) { this.notify('Load a circuit first', 'warn'); return; }
-    const eng  = ENGINE[AppState.currentId];
+    const eng = ENGINE[AppState.currentId];
     const vals = _readInputValues();
-    const P    = { results: [], formula: '', sb_gain: '', sb_freq: '', bode: null };
+    const P = { results: [], formula: '', sb_gain: '', sb_freq: '', bode: null };
     eng.calc(vals, P);
 
     const html = `<!DOCTYPE html>
@@ -116,7 +126,7 @@ ${(eng.tips || []).map(t => `<div class="tip">• ${t}</div>`).join('')}
     const blob = new Blob([html], { type: 'text/html' });
     const link = document.createElement('a');
     link.download = `CircuitForge_Report_${AppState.currentId}.html`;
-    link.href     = URL.createObjectURL(blob);
+    link.href = URL.createObjectURL(blob);
     link.click();
     this.notify('HTML report exported!');
   },
@@ -126,7 +136,7 @@ ${(eng.tips || []).map(t => `<div class="tip">• ${t}</div>`).join('')}
   }
 };
 
-/* expose to HTML onclick attributes */
+/* expose utilities to HTML (will be overwritten after internal functions are defined) */
 window.exportPNG       = () => AppUtils.exportPNG();
 window.exportReport    = () => AppUtils.exportReport();
 window.copyCanvasImage = () => AppUtils.copyCanvas();
@@ -144,7 +154,6 @@ window.calcRC          = ()  => RCCalc.compute();
 window.clearHistory    = ()  => _clearHistory();
 window.reloadHistory   = i  => _reloadHistory(i);
 window.filterNav       = q  => _filterNav(q);
-window.runCircuit      = ()  => runCircuit();
 
 /* ============================================================
    SIDEBAR / NAVIGATION
@@ -164,8 +173,8 @@ function buildNav() {
     header.innerHTML = `<span class="cat-title">${cat}</span><span class="cat-arrow open">▶</span>`;
     header.onclick = () => {
       const content = header.nextElementSibling;
-      const arrow   = header.querySelector('.cat-arrow');
-      const open    = content.classList.contains('open');
+      const arrow = header.querySelector('.cat-arrow');
+      const open = content.classList.contains('open');
       content.classList.toggle('open', !open);
       arrow.classList.toggle('open', !open);
     };
@@ -175,11 +184,11 @@ function buildNav() {
 
     items.forEach(item => {
       const btn = document.createElement('button');
-      btn.className     = 'nav-item';
-      btn.id            = 'nav-' + item.id;
-      btn.dataset.name  = item.name.toLowerCase();
-      btn.innerHTML     = `<span class="nav-item-icon">${item.icon}</span><span>${item.name}</span>`;
-      btn.onclick       = () => loadCircuit(item.id);
+      btn.className = 'nav-item';
+      btn.id = 'nav-' + item.id;
+      btn.dataset.name = item.name.toLowerCase();
+      btn.innerHTML = `<span class="nav-item-icon">${item.icon}</span><span>${item.name}</span>`;
+      btn.onclick = () => loadCircuit(item.id);
       content.appendChild(btn);
     });
 
@@ -187,6 +196,7 @@ function buildNav() {
     wrap.appendChild(content);
     nav.appendChild(wrap);
   });
+  console.log('[buildNav] navigation built');
 }
 
 function _filterNav(q) {
@@ -201,8 +211,10 @@ function _filterNav(q) {
    ============================================================ */
 
 function loadCircuit(id) {
+  console.log(`[loadCircuit] trying to load ${id}`);
   const eng = ENGINE[id];
   if (!eng) { AppUtils.notify(`Circuit "${id}" not found`, 'err'); return; }
+  console.log('[loadCircuit] engine found:', eng.title);
 
   AppState.currentId = id;
 
@@ -213,9 +225,9 @@ function loadCircuit(id) {
 
   /* Header info */
   _setText('active-circuit-name', eng.title);
-  _setText('canvasCircuitTitle',  eng.title);
-  _setText('canvasCircuitSub',    eng.subtitle);
-  _setText('sb_circuit',          eng.title);
+  _setText('canvasCircuitTitle', eng.title);
+  _setText('canvasCircuitSub', eng.subtitle);
+  _setText('sb_circuit', eng.title);
 
   /* Build parameter inputs */
   _buildParamUI(eng);
@@ -232,7 +244,8 @@ function loadCircuit(id) {
   _setText('referencesBox', eng.refs || 'See relevant IC datasheets and application notes.');
 
   /* Show canvas */
-  _el('welcomeState')?.style && (_el('welcomeState').style.display = 'none');
+  const welcome = _el('welcomeState');
+  if (welcome) welcome.style.display = 'none';
   const cv = document.getElementById('circuitCanvas');
   if (cv) cv.style.display = 'block';
 
@@ -264,21 +277,46 @@ function _buildParamUI(eng) {
 }
 
 /* ============================================================
-   MAIN ENGINE RUN
+   MAIN ENGINE RUN (with re-entrancy lock)
    ============================================================ */
 
+let _runningCircuit = false;  // prevents infinite recursion
+
 function runCircuit() {
+  if (_runningCircuit) {
+    console.warn('runCircuit already in progress, skipping recursive call');
+    return;
+  }
+  _runningCircuit = true;
+  try {
+    _runCircuitInternal();
+  } catch (e) {
+    console.error('Unhandled error in runCircuit:', e);
+    AppUtils.notify(`Error: ${e.message}`, 'err');
+  } finally {
+    _runningCircuit = false;
+  }
+}
+
+function _runCircuitInternal() {
   const id = AppState.currentId;
-  if (!id || !ENGINE[id]) return;
+  console.log('[runCircuit] id =', id);
+  if (!id || !ENGINE[id]) {
+    console.warn('runCircuit: no circuit loaded');
+    return;
+  }
   const eng = ENGINE[id];
 
   const vals = _readInputValues();
-  const P    = { results: [], formula: '', sb_gain: '', sb_freq: '', bode: null };
+  const P = { results: [], formula: '', sb_gain: '', sb_freq: '', bode: null };
 
   try {
     eng.calc(vals, P);
+    console.log('[runCircuit] calc successful');
   } catch (e) {
     console.error('calc error:', e);
+    AppUtils.notify('Calculation error: ' + e.message, 'err');
+    return; // early exit
   }
 
   /* Draw schematic */
@@ -287,8 +325,7 @@ function runCircuit() {
   /* Formula box */
   const fb = document.getElementById('formulaBox');
   if (fb && P.formula) {
-    fb.innerHTML = P.formula.split('\n')
-      .map(l => `<div>${l}</div>`).join('');
+    fb.innerHTML = P.formula.split('\n').map(l => `<div>${l}</div>`).join('');
   }
 
   /* Analysis tab */
@@ -304,14 +341,15 @@ function runCircuit() {
   _saveHistory(id, vals, P.results);
 
   /* Refresh active analysis views */
-  if (AppState.mainView === 'bode')      BodePlot.run(P.bode);
+  if (AppState.mainView === 'bode') BodePlot.run(P.bode);
   if (AppState.mainView === 'transient') TransientSim.run(P.bode);
-  if (AppState.mainView === 'phasor')    PhasorDiagram.draw(P.bode);
+  if (AppState.mainView === 'phasor') PhasorDiagram.draw(P.bode);
 }
 
 function _readInputValues() {
-  const id  = AppState.currentId;
+  const id = AppState.currentId;
   const eng = ENGINE[id];
+  if (!eng) return {};
   const vals = {};
   eng.inputs.forEach(inp => {
     const el = document.getElementById('p_' + inp.id);
@@ -322,8 +360,15 @@ function _readInputValues() {
 
 function _drawSchematic(eng, vals) {
   const canvas = document.getElementById('circuitCanvas');
-  if (!canvas) return;
+  if (!canvas) {
+    console.error('_drawSchematic: canvas missing');
+    return;
+  }
   const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    console.error('_drawSchematic: cannot get 2d context');
+    return;
+  }
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   /* Grid */
@@ -331,7 +376,8 @@ function _drawSchematic(eng, vals) {
 
   /* Circuit */
   try {
-    eng.draw(ctx, vals);
+    if (eng.draw) eng.draw(ctx, vals);
+    else console.warn('draw method missing for', eng.title);
   } catch (e) {
     console.error('draw error:', e);
     ctx.fillStyle = '#ef4444';
@@ -391,7 +437,7 @@ function _updateStatusBar(P) {
    ============================================================ */
 
 function _saveHistory(id, vals, results) {
-  const eng  = ENGINE[id];
+  const eng = ENGINE[id];
   const item = {
     id, title: eng.title,
     time: new Date().toLocaleTimeString(),
@@ -399,9 +445,7 @@ function _saveHistory(id, vals, results) {
     results: results || []
   };
   AppState.history.unshift(item);
-  if (AppState.history.length > AppState.MAX_HISTORY)
-    AppState.history.pop();
-
+  if (AppState.history.length > AppState.MAX_HISTORY) AppState.history.pop();
   _renderHistory();
 }
 
@@ -429,7 +473,6 @@ function _reloadHistory(i) {
   if (!h) return;
 
   loadCircuit(h.id);
-  /* Restore values after DOM settles */
   requestAnimationFrame(() => {
     Object.entries(h.vals || {}).forEach(([k, v]) => {
       const el = document.getElementById('p_' + k);
@@ -455,26 +498,23 @@ window.switchMainTab = function(view, btn) {
   document.querySelectorAll('.panel-tab').forEach(b => b.classList.remove('active'));
   if (btn) btn.classList.add('active');
 
-  /* Map view name → element id suffix */
   const viewMap = {
     schematic: 'Schematic',
-    bode:      'Bode',
+    bode: 'Bode',
     transient: 'Transient',
-    phasor:    'Phasor',
-    components:'Components'
+    phasor: 'Phasor',
+    components: 'Components'
   };
 
   Object.entries(viewMap).forEach(([v, suffix]) => {
     const el = document.getElementById('mainView' + suffix);
     if (!el) return;
-    const isActive = v === view;
-    el.style.display = isActive ? 'flex' : 'none';
+    el.style.display = v === view ? 'flex' : 'none';
   });
 
-  /* Trigger view-specific refresh */
-  if (view === 'bode')      BodePlot.run(AppState.bodeData);
+  if (view === 'bode') BodePlot.run(AppState.bodeData);
   if (view === 'transient') TransientSim.run(AppState.bodeData);
-  if (view === 'phasor')    PhasorDiagram.draw(AppState.bodeData);
+  if (view === 'phasor') PhasorDiagram.draw(AppState.bodeData);
   if (view === 'components') { RCCalc.compute(); ESeriesPicker.run(); }
 };
 
@@ -487,33 +527,28 @@ window.switchRpTab = function(tab, btn) {
 };
 
 /* ============================================================
-   AI ADVISOR
+   AI ADVISOR (unchanged)
    ============================================================ */
 
 window.sendAiMessage = async function() {
-  const input  = document.getElementById('aiInputField');
-  const msgs   = document.getElementById('aiMessages');
+  const input = document.getElementById('aiInputField');
+  const msgs = document.getElementById('aiMessages');
   if (!input || !msgs) return;
 
   const msg = input.value.trim();
   if (!msg) return;
   input.value = '';
 
-  /* User bubble */
   msgs.innerHTML += `<div class="ai-msg ai-msg-user">${_escHtml(msg)}</div>`;
 
-  /* Thinking indicator */
   const thinkId = 'ai-think-' + Date.now();
   msgs.innerHTML += `<div class="ai-msg ai-msg-bot" id="${thinkId}">
-    <div class="ai-thinking">
-      <div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div>
-    </div></div>`;
+    <div class="ai-thinking"><div class="ai-dot"></div><div class="ai-dot"></div><div class="ai-dot"></div></div></div>`;
   msgs.scrollTop = msgs.scrollHeight;
 
-  /* Build context */
   const eng = AppState.currentId ? ENGINE[AppState.currentId] : null;
   const ctx = eng
-    ? `Current circuit: "${eng.title}" — ${eng.subtitle}. Known tips: ${(eng.tips||[]).slice(0,3).join('; ')}`
+    ? `Current circuit: "${eng.title}" — ${eng.subtitle}. Known tips: ${(eng.tips || []).slice(0, 3).join('; ')}`
     : 'No circuit currently selected.';
 
   const systemPrompt = `You are CircuitForge Pro's expert electronics design engineer assistant.
@@ -537,17 +572,15 @@ Rules:
       })
     });
 
-    const data  = await res.json();
+    const data = await res.json();
     const reply = data?.content?.[0]?.text || 'Unable to process. Please try again.';
 
     const thinkEl = document.getElementById(thinkId);
     if (thinkEl) thinkEl.outerHTML = `<div class="ai-msg ai-msg-bot">${_escHtml(reply)}</div>`;
-
   } catch (e) {
     const thinkEl = document.getElementById(thinkId);
     if (thinkEl) thinkEl.outerHTML = `<div class="ai-msg ai-msg-bot" style="color:var(--danger)">Connection error. Check network.</div>`;
   }
-
   msgs.scrollTop = msgs.scrollHeight;
 };
 
@@ -571,26 +604,27 @@ document.addEventListener('keydown', e => {
    HELPERS
    ============================================================ */
 
-function _el(id)           { return document.getElementById(id); }
+function _el(id) { return document.getElementById(id); }
 function _setText(id, txt) { const el = _el(id); if (el) el.textContent = txt; }
-function _escHtml(str)     { return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _escHtml(str) { return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 /* ============================================================
    INITIALISATION
    ============================================================ */
 
 document.addEventListener('DOMContentLoaded', () => {
-  /* Build sidebar navigation */
   buildNav();
 
-  /* Hide canvas until a circuit is loaded */
   const cv = document.getElementById('circuitCanvas');
   if (cv) cv.style.display = 'none';
 
-  /* Initialise utility tools */
   RCCalc.compute();
   ESeriesPicker.run();
 
-  /* Load default circuit */
   setTimeout(() => loadCircuit('amp_inv'), 80);
 });
+
+/* expose runCircuit after everything is defined */
+window.runCircuit = runCircuit;
+
+console.log('[app] app.js fully loaded and initialised (recursion fixed)');
