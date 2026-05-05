@@ -612,7 +612,63 @@ function _escHtml(str) { return str.replace(/&/g, '&amp;').replace(/</g, '&lt;')
    INITIALISATION
    ============================================================ */
 
+/* ============================================================
+   RESPONSIVE TOGGLE & RESIZE HANDLING
+   ============================================================ */
+
+function toggleSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (sidebar) sidebar.classList.toggle('open');
+}
+
+// Add menu button to header dynamically (if not present)
+function addMenuButton() {
+  const headerLeft = document.querySelector('.header-logo');
+  if (!headerLeft) return;
+  // Check if button already exists
+  if (document.querySelector('.menu-toggle')) return;
+  const btn = document.createElement('button');
+  btn.className = 'menu-toggle';
+  btn.innerHTML = '☰';
+  btn.setAttribute('aria-label', 'Menu');
+  btn.onclick = toggleSidebar;
+  headerLeft.insertBefore(btn, headerLeft.firstChild);
+}
+
+// Close sidebar when clicking outside (on mobile)
+document.addEventListener('click', function(e) {
+  const sidebar = document.querySelector('.sidebar');
+  const toggle = document.querySelector('.menu-toggle');
+  if (!sidebar || !sidebar.classList.contains('open')) return;
+  if (window.innerWidth > 768) return;
+  if (!sidebar.contains(e.target) && !toggle?.contains(e.target)) {
+    sidebar.classList.remove('open');
+  }
+});
+
+// Adjust canvas size on window resize
+function handleResize() {
+  const canvas = document.getElementById('circuitCanvas');
+  if (canvas && AppState.currentId) {
+    // Force redraw with same dimensions? Canvas physical size is fixed, but CSS scaling handles display.
+    // Redraw to avoid distortion.
+    const eng = ENGINE[AppState.currentId];
+    if (eng) {
+      const vals = _readInputValues();
+      _drawSchematic(eng, vals);
+    }
+  }
+}
+
+window.addEventListener('resize', () => {
+  setTimeout(handleResize, 100);
+});
+
+
+
 document.addEventListener('DOMContentLoaded', () => {
+  addMenuButton();          // new
+
   buildNav();
 
   const cv = document.getElementById('circuitCanvas');
