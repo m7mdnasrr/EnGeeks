@@ -1,6 +1,7 @@
 /* ============================================================
    CircuitForge Pro — circuits.js
    All circuit definitions: inputs, calc, draw, tips, refs
+   Fixed: added fallbacks for fmtSI and drawCtx
    ============================================================ */
 
 'use strict';
@@ -65,9 +66,9 @@ window.CIRCUIT_CATEGORIES = {
 /* ── Master ENGINE object ── */
 window.ENGINE = {};
 
-/* helper shorthand */
-const f = window.fmtSI;
-const d = window.drawCtx;
+/* helper shorthand with fallbacks to prevent crashes if engine.js fails */
+const f = window.fmtSI || ((v, u) => (v !== undefined && !isNaN(v)) ? `${v} ${u}` : '—');
+const d = window.drawCtx || (() => { console.error('drawCtx missing'); return null; });
 
 /* ============================================================
    BASIC AMPLIFIERS
@@ -106,7 +107,8 @@ ENGINE.amp_inv = {
     return { Rf, Rc, gain:-v.gain, rin:v.rin*1e3 };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf } = ENGINE.amp_inv.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(520, 260);
     D.wire(100,240,200,240); D.portLabel(60,245,'Vin');
@@ -152,7 +154,8 @@ ENGINE.amp_noninv = {
     return { Rf, r1:v.r1*1e3 };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf } = ENGINE.amp_noninv.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(500,260);
     D.wire(300,280,460,280); D.portLabel(260,285,'Vin');
@@ -195,7 +198,8 @@ ENGINE.amp_follow = {
     return {};
   },
   draw(ctx) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(500,260);
     D.wire(280,280,460,280); D.portLabel(240,285,'Vin');
     D.wire(460,240,360,240);
@@ -238,7 +242,8 @@ ENGINE.amp_diff = {
     return { Rf, r1:v.r1*1e3 };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf } = ENGINE.amp_diff.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(530,260);
     D.wire(100,240,180,240); D.portLabel(60,245,'V1 (−)');
@@ -286,7 +291,8 @@ ENGINE.amp_inst = {
     return { Rf, Rg };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf, Rg } = ENGINE.amp_inst.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(220,150,'U1'); D.opamp(220,390,'U2'); D.opamp(580,270,'U3');
     D.wire(60,170,180,170); D.portLabel(30,175,'V1−');
@@ -341,21 +347,34 @@ ENGINE.amp_trans = {
     return { Rf, bw };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf } = ENGINE.amp_trans.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
+    
     D.opamp(520,260);
     D.diode(310,240,true);
     D.wire(180,240,292,240); D.portLabel(140,245,'Ip ↓');
     D.wire(328,240,480,240); D.node(400,240);
     D.wire(310,258,310,290); D.ground(310,290);
+    
+    // Non-inverting input to ground
     D.wire(480,280,450,280); D.ground(450,280);
+    
+    // Feedback loop - Left side
     D.wire(400,240,400,140); D.wire(400,140,460,140);
     D.resistor(490,140,'Rf',f(Rf,'Ω'));
-    D.wire(530,140,600,140); D.wire(600,140,600,260); D.node(600,260);
+    
+    // Feedback loop - Right side return to output
+    D.wire(530,140,600,140); 
+    // FIX: Changed starting Y coordinate from 140 to 100 to catch the Cf wire
+    D.wire(600,100,600,260); D.node(600,260); 
+    
     // Cf parallel with Rf
     D.wire(400,140,400,100); D.wire(400,100,468,100);
     D.capacitor(498,100,'Cf',f(v.cf*1e-12,'F'));
-    D.wire(528,100,600,100);
+    D.wire(528,100,600,100); // This now intersects the newly extended vertical wire
+    
+    // Output
     D.wire(580,260,670,260); D.portLabel(690,265,'Vout');
   },
 };
@@ -399,7 +418,8 @@ ENGINE.math_sum = {
     return { vout, k };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { vout } = ENGINE.math_sum.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(580,270);
     D.node(440,250); D.wire(440,250,500,250);
@@ -450,7 +470,8 @@ ENGINE.math_diff = {
     return { gain, vout };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { vout } = ENGINE.math_diff.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(520,260);
     D.wire(100,240,170,240); D.portLabel(60,245,'V1');
@@ -498,7 +519,8 @@ ENGINE.math_int = {
     return { tau, fc };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { tau, fc } = ENGINE.math_int.calc(v, { results:[], formula:'', sb_gain:'', bode:{} });
     D.opamp(520,260);
     D.wire(120,240,180,240); D.portLabel(80,245,'Vin');
@@ -544,7 +566,8 @@ ENGINE.math_deriv = {
     return { tau, fu };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(520,260);
     D.wire(120,240,180,240); D.portLabel(80,245,'Vin');
     D.capacitor(210,240,'C',f(v.cin*1e-9,'F'));
@@ -583,7 +606,8 @@ ENGINE.math_log = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(520,260);
     D.wire(120,240,180,240); D.portLabel(80,245,'Vin (>0)');
     D.resistor(210,240,'Rin',f(v.rin*1e3,'Ω')); D.wire(250,240,480,240); D.node(360,240);
@@ -619,7 +643,8 @@ ENGINE.math_antilog = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(520,260);
     D.wire(120,240,190,240); D.portLabel(80,245,'Vin');
     D.diode(218,240,false);
@@ -656,15 +681,41 @@ ENGINE.math_abs = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
-    D.opamp(300,220,'U1'); D.opamp(580,280,'U2');
-    D.wire(80,200,260,200); D.portLabel(40,205,'Vin');
-    D.wire(80,200,80,300); D.wire(80,300,260,300);
-    D.wire(340,220,380,220); D.diode(400,220,false); D.wire(420,220,460,220);
-    D.wire(340,300,380,300); D.diode(400,300,false); D.wire(420,300,460,300);
-    D.resistor(490,220,'R',f(v.r*1e3,'Ω')); D.wire(530,220,540,220);
-    D.resistor(490,300,'R',f(v.r*1e3,'Ω')); D.wire(530,300,540,280);
-    D.wire(540,260,540,330); D.resistor(540,358,'R',f(v.r*1e3,'Ω'),true); D.ground(540,386);
+    const D = d(ctx);
+    if (!D) return;
+    
+    // Op-amps (Inputs automatically extend 60px to the left)
+    D.opamp(300,220,'U1'); // Inputs start at x=240
+    D.opamp(580,280,'U2'); // Inputs start at x=520
+    
+    // Main Vin network
+    D.wire(80,200,240,200); D.portLabel(40,205,'Vin'); // Connects perfectly to U1(-) at 240
+    D.wire(80,200,80,300);
+    D.wire(80,300,340,300); // Extends straight to the bottom diode
+
+    // Ground U1(+) cleanly at the tip of its stub (x=240)
+    D.wire(240,240,240,260); D.ground(240,260); 
+
+    // --- TOP BRANCH ---
+    D.wire(340,220,380,220); 
+    D.diode(400,220,false); 
+    D.wire(420,220,460,220);
+    D.resistor(490,220,'R',f(v.r*1e3,'Ω')); // This resistor ends exactly at x=520
+    D.wire(520,220,520,260); // Drops cleanly into the tip of the U2(-) stub
+
+    // --- BOTTOM BRANCH ---
+    D.wire(340,300,380,300); 
+    D.diode(400,300,false); 
+    D.wire(420,300,460,300);
+    D.resistor(490,300,'R',f(v.r*1e3,'Ω')); // Ends exactly at x=520, directly hitting U2(+)
+
+    // --- U2 GROUND RESISTOR ---
+    // Dropped safely from U2(+) at y=300 to prevent crossing the other input wire
+    D.wire(520,300,520,330); 
+    D.resistor(520,358,'R',f(v.r*1e3,'Ω'),true); 
+    D.ground(520,386);
+    
+    // Output
     D.wire(620,280,710,280); D.portLabel(730,285,'|Vout|');
   },
 };
@@ -706,17 +757,39 @@ ENGINE.filt_lpf = {
     return { R };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R } = ENGINE.filt_lpf.calc(v, { results:[], formula:'', bode:{} });
-    D.opamp(580,260);
-    D.wire(80,270,140,270); D.portLabel(40,275,'Vin');
-    D.resistor(168,270,'R1',f(R,'Ω')); D.wire(208,270,268,270); D.node(248,270);
-    D.resistor(296,270,'R2',f(R,'Ω')); D.wire(336,270,540,270); D.node(418,270);
-    D.wire(540,240,540,185); D.wire(540,185,645,185); D.wire(645,185,645,260); D.node(645,260);
+    
+    D.opamp(580,260); // Op-amp center at 260. (-) is at 240, (+) is at 280.
+    
+    // Main input line - Shifted to y=280 to align with the (+) input
+    D.wire(80,280,140,280); D.portLabel(40,285,'Vin');
+    D.resistor(168,280,'R1',f(R,'Ω')); 
+    D.wire(203,280,258,280); D.node(240,280);
+    D.resistor(286,280,'R2',f(R,'Ω')); 
+    D.wire(321,280,540,280); D.node(418,280);
+    
+    // Unity gain feedback loop - Connects output to (-) input at y=240
+    D.wire(540,240,540,185); 
+    D.wire(540,185,645,185); 
+    D.wire(645,185,645,260); 
+    D.node(645,260); // Output tie node
+    
+    // Output port
     D.wire(625,260,720,260); D.portLabel(740,265,'Vout');
-    D.wire(248,270,248,200); D.wire(248,200,358,200);
-    D.capacitor(388,200,'C1',f(v.c*1e-9,'F')); D.wire(418,200,645,200); D.node(645,200);
-    D.wire(418,270,418,320); D.capacitor(418,348,'C2',f(v.c*1e-9,'F'),true); D.ground(418,376);
+    
+    // C1 Feedback loop - Routed higher (y=130) to avoid crossing the op-amp
+    D.wire(240,280,240,130); 
+    D.wire(240,130,358,130);
+    D.capacitor(388,130,'C1',f(v.c*1e-9,'F')); 
+    D.wire(418,130,645,130); 
+    D.wire(645,130,645,185); // Ties smoothly down into the unity gain loop
+    
+    // C2 branch to ground - Drops down from the node before the op-amp
+    D.wire(418,280,418,320); 
+    D.capacitor(418,348,'C2',f(v.c*1e-9,'F'),true); 
+    D.ground(418,376);
   },
 };
 
@@ -753,17 +826,39 @@ ENGINE.filt_hpf = {
     return { R };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R } = ENGINE.filt_hpf.calc(v, { results:[], formula:'', bode:{} });
-    D.opamp(580,260);
-    D.wire(80,270,140,270); D.portLabel(40,275,'Vin');
-    D.capacitor(168,270,'C1',f(v.c*1e-9,'F')); D.wire(203,270,258,270); D.node(240,270);
-    D.capacitor(286,270,'C2',f(v.c*1e-9,'F')); D.wire(321,270,540,270); D.node(418,270);
-    D.wire(540,240,540,185); D.wire(540,185,645,185); D.wire(645,185,645,260); D.node(645,260);
+    
+    D.opamp(580,260); // Op-amp center at 260. (-) is at 240, (+) is at 280.
+    
+    // Main input line - Shifted to y=280 to cleanly hit the (+) input
+    D.wire(80,280,140,280); D.portLabel(40,285,'Vin');
+    D.capacitor(168,280,'C1',f(v.c*1e-9,'F')); 
+    D.wire(203,280,258,280); D.node(240,280);
+    D.capacitor(286,280,'C2',f(v.c*1e-9,'F')); 
+    D.wire(321,280,540,280); D.node(418,280);
+    
+    // Unity gain feedback loop - Connects output to (-) input at y=240
+    D.wire(540,240,540,185); 
+    D.wire(540,185,645,185); 
+    D.wire(645,185,645,260); 
+    D.node(645,260); // Output tie node
+    
+    // Output port
     D.wire(625,260,720,260); D.portLabel(740,265,'Vout');
-    D.wire(240,270,240,200); D.wire(240,200,358,200);
-    D.resistor(388,200,'R1',f(R,'Ω')); D.wire(428,200,645,200); D.node(645,200);
-    D.wire(418,270,418,320); D.resistor(418,348,'R2',f(R,'Ω'),true); D.ground(418,376);
+    
+    // R1 Feedback loop - Routed higher (y=130) to safely bypass the op-amp body
+    D.wire(240,280,240,130); 
+    D.wire(240,130,358,130);
+    D.resistor(388,130,'R1',f(R,'Ω')); 
+    D.wire(428,130,645,130); 
+    D.wire(645,130,645,185); // Ties smoothly down into the unity gain loop
+    
+    // R2 branch to ground - Drops down from the node before the op-amp
+    D.wire(418,280,418,320); 
+    D.resistor(418,348,'R2',f(R,'Ω'),true); 
+    D.ground(418,376);
   },
 };
 
@@ -804,7 +899,8 @@ ENGINE.filt_bpf = {
     return { Q, R1, R2 };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R1, R2 } = ENGINE.filt_bpf.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(580,260);
     D.wire(540,280,510,280); D.ground(510,280);
@@ -852,7 +948,8 @@ ENGINE.filt_notch = {
     return { R, C };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R, C } = ENGINE.filt_notch.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(660,260);
     D.wire(80,260,140,260); D.portLabel(40,265,'Vin');
@@ -901,7 +998,8 @@ ENGINE.filt_allpass = {
     return { C };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { C } = ENGINE.filt_allpass.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(520,260);
     D.wire(80,260,180,260); D.portLabel(40,265,'Vin');
@@ -951,7 +1049,8 @@ ENGINE.filt_butter = {
     return { R, Rf };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R, Rf } = ENGINE.filt_butter.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(580,260);
     D.wire(80,270,140,270); D.portLabel(40,275,'Vin');
@@ -1007,7 +1106,8 @@ ENGINE.osc_wien = {
     return { R, C };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R, C } = ENGINE.osc_wien.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(480,260);
     D.wire(520,260,630,260); D.portLabel(650,265,'Vout'); D.node(600,260);
@@ -1056,7 +1156,8 @@ ENGINE.osc_rc = {
     return { R, Rf, C };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R, Rf, C } = ENGINE.osc_rc.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(610,260);
     D.wire(550,280,520,280); D.ground(520,280);
@@ -1103,7 +1204,8 @@ ENGINE.osc_astable = {
     return { R, C };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R, C } = ENGINE.osc_astable.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(480,260);
     D.wire(520,260,630,260); D.portLabel(650,265,'Vout_SQ'); D.node(590,260);
@@ -1146,7 +1248,8 @@ ENGINE.osc_crystal = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     // Crystal symbol
     const drawXtal = (x, y) => {
       const c = D.ctx;
@@ -1209,7 +1312,8 @@ ENGINE.osc_colpitts = {
     return { fo, Ceq };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { fo } = ENGINE.osc_colpitts.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(400,260,'A1');
     D.wire(440,260,560,260); D.node(520,260);
@@ -1258,7 +1362,8 @@ ENGINE.nl_comp = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(480,260);
     D.wire(320,240,440,240); D.portLabel(280,245,'Vin');
     D.wire(320,280,380,280); D.portLabel(250,285,`Vref=${v.vref}V`); D.wire(380,280,440,280);
@@ -1300,7 +1405,8 @@ ENGINE.nl_schmitt = {
     return { R2 };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { R2 } = ENGINE.nl_schmitt.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(480,260);
     D.wire(320,240,440,240); D.portLabel(280,245,'Vin');
@@ -1341,7 +1447,8 @@ ENGINE.nl_window = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(360,180,'U1'); D.opamp(360,360,'U2');
     D.wire(80,160,320,160); D.portLabel(40,165,'Vin');
     D.wire(80,160,80,340); D.wire(80,340,320,340);
@@ -1388,7 +1495,8 @@ ENGINE.nl_rect = {
     return { gain };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(490,260);
     D.wire(180,240,250,240); D.portLabel(140,245,'Vin');
     D.resistor(278,240,'Rin',f(v.rin*1e3,'Ω')); D.wire(318,240,450,240); D.node(368,240);
@@ -1435,7 +1543,8 @@ ENGINE.nl_peak = {
     return { tau };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(290,240,'U1'); D.opamp(590,270,'U2');
     D.wire(80,220,250,220); D.portLabel(40,225,'Vin');
     D.wire(330,240,378,240); D.diode(400,240,false); D.labelSmall(385,222,'D1',D.clrText2);
@@ -1476,7 +1585,8 @@ ENGINE.nl_clamp = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(440,260);
     D.wire(80,270,170,270); D.portLabel(40,275,'Vin');
     D.resistor(198,270,'R',f(v.r*1e3,'Ω')); D.wire(238,270,400,270); D.node(355,270);
@@ -1515,7 +1625,8 @@ ENGINE.nl_clip = {
     return {};
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     D.opamp(470,260);
     D.wire(80,240,450,240); D.portLabel(40,245,'Vin');
     D.wire(450,280,410,280); D.node(410,280);
@@ -1561,7 +1672,8 @@ ENGINE.conv_itov = {
     return { Rf };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rf } = ENGINE.conv_itov.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(510,260);
     // Current source circle
@@ -1610,7 +1722,8 @@ ENGINE.conv_vtoi = {
     return { iout };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { iout } = ENGINE.conv_vtoi.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(470,260);
     D.wire(320,270,430,270); D.portLabel(280,275,'Vin');
@@ -1656,7 +1769,8 @@ ENGINE.conv_dac = {
     return { vout, lsb, code, maxCode };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { vout } = ENGINE.conv_dac.calc(v, { results:[], formula:'', bode:{} });
     const bits = Math.min(Math.floor(v.bits), 4);
     for (let i = 0; i < bits; i++) {
@@ -1713,7 +1827,8 @@ ENGINE.conv_adc = {
     return { code, binary, lsb };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { binary, code } = ENGINE.conv_adc.calc(v, { results:[], formula:'', bode:{} });
     const lsb = v.vref / 8;
     for (let i = 0; i < 7; i++) {
@@ -1776,7 +1891,8 @@ ENGINE.pwr_reg = {
     return { pdiss, r1, r2, eff };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { pdiss, r1, r2 } = ENGINE.pwr_reg.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(340,200,'EA');
     // BJT pass transistor
@@ -1831,7 +1947,8 @@ ENGINE.pwr_ref = {
     return { Rs };
   },
   draw(ctx, v) {
-    const D = drawCtx(ctx);
+    const D = d(ctx);
+    if (!D) return;
     const { Rs } = ENGINE.pwr_ref.calc(v, { results:[], formula:'', bode:{} });
     D.opamp(460,260);
     D.wire(80,260,140,260); D.portLabel(40,265,`Vin=${v.vin}V`,'#ef4444');
@@ -1844,3 +1961,5 @@ ENGINE.pwr_ref = {
     D.wire(500,260,630,260); D.portLabel(650,265,'Vref='+f(v.vz,'V'),'#10b981');
   },
 };
+
+console.log('[circuits] All 30+ circuit definitions loaded');
